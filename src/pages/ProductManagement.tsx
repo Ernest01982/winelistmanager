@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Wine } from '../types/wine';
 import { Supplier } from '../types/supplier';
-import { Trash2, Plus, Package, Search, Edit2, X, PlusCircle } from 'lucide-react';
+import { Trash2, Plus, Package, Search, CreditCard as Edit2, X, PlusCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Alert, AlertDescription } from '../components/ui/alert';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Supplier } from '../types/supplier';
-import { Truck, Plus, Search, Edit2, X, Trash2, Mail, Phone, MapPin, User } from 'lucide-react';
+import { Truck, Plus, Search, CreditCard as Edit2, X, Trash2, Mail, Phone, MapPin, User } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Alert, AlertDescription } from '../components/ui/alert';
