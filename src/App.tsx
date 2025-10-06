@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { Wine as WineIcon, Upload, Eye, Download, Settings, FileSpreadsheet, Package } from 'lucide-react';
+import { Wine as WineIcon, Upload, Eye, Download, Settings, FileSpreadsheet, Package, Truck } from 'lucide-react';
 import { FileUpload } from './components/FileUpload';
 import { CompanyBranding } from './components/CompanyBranding';
-import { WineSelection } from './components/WineSelection';
 import { WinePreview } from './components/WinePreview';
 import { ExportOptions } from './components/ExportOptions';
 import { useWineData } from './hooks/useWineData';
 import { PricingUpload } from './pages/PricingUpload';
 import { ProductManagement } from './pages/ProductManagement';
+import { ProductSelection } from './pages/ProductSelection';
+import { SupplierManagement } from './pages/SupplierManagement';
 
-type ActiveTab = 'upload' | 'branding' | 'selection' | 'preview' | 'export' | 'pricing' | 'products';
+type ActiveTab = 'upload' | 'branding' | 'selection' | 'preview' | 'export' | 'pricing' | 'products' | 'suppliers';
 
 function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('upload');
@@ -34,9 +35,10 @@ function App() {
   const tabs = [
     { id: 'upload' as ActiveTab, label: 'Upload', icon: Upload, disabled: false },
     { id: 'pricing' as ActiveTab, label: 'Pricing Upload', icon: FileSpreadsheet, disabled: false },
+    { id: 'suppliers' as ActiveTab, label: 'Suppliers', icon: Truck, disabled: false },
     { id: 'products' as ActiveTab, label: 'Products', icon: Package, disabled: false },
+    { id: 'selection' as ActiveTab, label: 'Selection', icon: WineIcon, disabled: false },
     { id: 'branding' as ActiveTab, label: 'Branding', icon: Settings, disabled: false },
-    { id: 'selection' as ActiveTab, label: 'Selection', icon: WineIcon, disabled: wines.length === 0 },
     { id: 'preview' as ActiveTab, label: 'Preview', icon: Eye, disabled: selectedCount === 0 },
     { id: 'export' as ActiveTab, label: 'Export', icon: Download, disabled: selectedCount === 0 },
   ];
@@ -120,13 +122,16 @@ function App() {
             <PricingUpload />
           )}
 
+          {activeTab === 'suppliers' && (
+            <SupplierManagement />
+          )}
+
           {activeTab === 'products' && (
-            <ProductManagement
-              wines={wines}
-              onAddWine={addWine}
-              onDeleteWine={deleteWine}
-              onUpdateWine={updateWine}
-            />
+            <ProductManagement />
+          )}
+
+          {activeTab === 'selection' && (
+            <ProductSelection />
           )}
 
           {activeTab === 'branding' && (
@@ -144,20 +149,6 @@ function App() {
             </div>
           )}
 
-          {activeTab === 'selection' && (
-            <div>
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Select Wines</h2>
-                <p className="text-gray-600">
-                  Choose which wines to include in your client-facing menu
-                </p>
-              </div>
-              <WineSelection 
-                wines={wines}
-                onToggleWine={toggleWineSelection}
-              />
-            </div>
-          )}
 
           {activeTab === 'preview' && (
             <div>

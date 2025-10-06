@@ -1,28 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Wine } from '../types/wine';
-import { Trash2, Plus, Package, Search, CreditCard as Edit2, X } from 'lucide-react';
+import { Supplier } from '../types/supplier';
+import { Trash2, Plus, Package, Search, Edit2, X, PlusCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Badge } from '../components/ui/badge';
+import { supabase } from '../lib/supabase';
 
 interface ProductManagementProps {
-  wines: Wine[];
-  onAddWine: (wine: Omit<Wine, 'id' | 'selected'>) => void;
-  onDeleteWine: (wineId: string) => void;
-  onUpdateWine: (wineId: string, wine: Partial<Wine>) => void;
+  onProductsChanged?: () => void;
 }
 
-export const ProductManagement: React.FC<ProductManagementProps> = ({
-  wines,
-  onAddWine,
-  onDeleteWine,
-  onUpdateWine
-}) => {
+export const ProductManagement: React.FC<ProductManagementProps> = ({ onProductsChanged }) => {
+  const [products, setProducts] = useState<Wine[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [editingWine, setEditingWine] = useState<Wine | null>(null);
+  const [isQuickAddSupplierOpen, setIsQuickAddSupplierOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Wine | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -32,72 +31,176 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
     price: '',
     region: '',
     varietal: '',
-    supplier: ''
+    supplier_id: ''
   });
 
-  const filteredWines = wines.filter(wine =>
-    wine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    wine.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (wine.supplier && wine.supplier.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const [quickSupplierData, setQuickSupplierData] = useState({
+    name: '',
+    contact_person: '',
+    email: '',
+    phone: ''
+  });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    loadData();
+  }, []);
 
-    const newWine = {
-      name: formData.name,
-      description: formData.description,
-      category: formData.category,
-      vintage: formData.vintage || undefined,
-      price: parseFloat(formData.price),
-      region: formData.region || undefined,
-      varietal: formData.varietal || undefined,
-      supplier: formData.supplier || undefined
-    };
-
-    if (editingWine) {
-      onUpdateWine(editingWine.id, newWine);
-      setEditingWine(null);
-    } else {
-      onAddWine(newWine);
-    }
-
-    setFormData({
-      name: '',
-      description: '',
-      category: 'Red Wine',
-      vintage: '',
-      price: '',
-      region: '',
-      varietal: '',
-      supplier: ''
-    });
-    setIsAddDialogOpen(false);
+  const loadData = async () => {
+    await Promise.all([loadProducts(), loadSuppliers()]);
   };
 
-  const handleEdit = (wine: Wine) => {
+  const loadProducts = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('products')
+        .select(`
+          *,
+          suppliers (
+            id,
+            name
+          )
+        `)
+        .order('name');
+
+      if (error) throw error;
+
+      const productsWithSupplier = (data || []).map(product => ({
+        ...product,
+        supplier: product.suppliers?.name,
+        supplier_id: product.supplier_id || undefined
+      }));
+
+      setProducts(productsWithSupplier);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load products');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadSuppliers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('suppliers')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      setSuppliers(data || []);
+    } catch (err) {
+      console.error('Failed to load suppliers:', err);
+    }
+  };
+
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (product.supplier && product.supplier.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const handleQuickAddSupplier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    try {
+      const { data, error } = await supabase
+        .from('suppliers')
+        .insert([{
+          name: quickSupplierData.name,
+          contact_person: quickSupplierData.contact_person,
+          email: quickSupplierData.email,
+          phone: quickSupplierData.phone
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      await loadSuppliers();
+      setFormData({ ...formData, supplier_id: data.id });
+      setQuickSupplierData({ name: '', contact_person: '', email: '', phone: '' });
+      setIsQuickAddSupplierOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add supplier');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    try {
+      const productData = {
+        name: formData.name,
+        description: formData.description,
+        category: formData.category,
+        vintage: formData.vintage || null,
+        price: parseFloat(formData.price),
+        region: formData.region || null,
+        varietal: formData.varietal || null,
+        supplier_id: formData.supplier_id || null
+      };
+
+      if (editingProduct) {
+        const { error } = await supabase
+          .from('products')
+          .update(productData)
+          .eq('id', editingProduct.id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('products')
+          .insert([productData]);
+
+        if (error) throw error;
+      }
+
+      await loadProducts();
+      handleCloseDialog();
+      onProductsChanged?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save product');
+    }
+  };
+
+  const handleEdit = (product: Wine) => {
     setFormData({
-      name: wine.name,
-      description: wine.description,
-      category: wine.category,
-      vintage: wine.vintage || '',
-      price: wine.price.toString(),
-      region: wine.region || '',
-      varietal: wine.varietal || '',
-      supplier: wine.supplier || ''
+      name: product.name,
+      description: product.description,
+      category: product.category,
+      vintage: product.vintage || '',
+      price: product.price.toString(),
+      region: product.region || '',
+      varietal: product.varietal || '',
+      supplier_id: product.supplier_id || ''
     });
-    setEditingWine(wine);
+    setEditingProduct(product);
     setIsAddDialogOpen(true);
   };
 
-  const handleDelete = (wineId: string) => {
-    onDeleteWine(wineId);
-    setDeleteConfirm(null);
+  const handleDelete = async (productId: string) => {
+    setError(null);
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', productId);
+
+      if (error) throw error;
+
+      await loadProducts();
+      setDeleteConfirm(null);
+      onProductsChanged?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete product');
+    }
   };
 
   const handleCloseDialog = () => {
     setIsAddDialogOpen(false);
-    setEditingWine(null);
+    setEditingProduct(null);
     setFormData({
       name: '',
       description: '',
@@ -106,7 +209,7 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
       price: '',
       region: '',
       varietal: '',
-      supplier: ''
+      supplier_id: ''
     });
   };
 
@@ -122,7 +225,7 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                   Product Management
                 </h1>
                 <p className="text-sm text-gray-600 mt-1">
-                  Manage your wine inventory ({wines.length} products)
+                  Manage your wine inventory ({products.length} products)
                 </p>
               </div>
 
@@ -135,7 +238,7 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>{editingWine ? 'Edit Product' : 'Add New Product'}</DialogTitle>
+                    <DialogTitle>{editingProduct ? 'Edit Product' : 'Add New Product'}</DialogTitle>
                   </DialogHeader>
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -162,6 +265,104 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                           rows={3}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-burgundy-500"
                         />
+                      </div>
+
+                      <div className="col-span-2">
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Supplier
+                          </label>
+                          <Dialog open={isQuickAddSupplierOpen} onOpenChange={setIsQuickAddSupplierOpen}>
+                            <DialogTrigger asChild>
+                              <button
+                                type="button"
+                                className="text-xs text-burgundy-600 hover:text-burgundy-700 flex items-center gap-1"
+                              >
+                                <PlusCircle className="h-3 w-3" />
+                                Quick Add Supplier
+                              </button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-md">
+                              <DialogHeader>
+                                <DialogTitle>Quick Add Supplier</DialogTitle>
+                              </DialogHeader>
+                              <form onSubmit={handleQuickAddSupplier} className="space-y-3">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Supplier Name *
+                                  </label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={quickSupplierData.name}
+                                    onChange={(e) => setQuickSupplierData({ ...quickSupplierData, name: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-burgundy-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Contact Person
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={quickSupplierData.contact_person}
+                                    onChange={(e) => setQuickSupplierData({ ...quickSupplierData, contact_person: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-burgundy-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Email
+                                  </label>
+                                  <input
+                                    type="email"
+                                    value={quickSupplierData.email}
+                                    onChange={(e) => setQuickSupplierData({ ...quickSupplierData, email: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-burgundy-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Phone
+                                  </label>
+                                  <input
+                                    type="tel"
+                                    value={quickSupplierData.phone}
+                                    onChange={(e) => setQuickSupplierData({ ...quickSupplierData, phone: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-burgundy-500"
+                                  />
+                                </div>
+                                <div className="flex justify-end gap-2 pt-2">
+                                  <Button
+                                    type="button"
+                                    onClick={() => setIsQuickAddSupplierOpen(false)}
+                                    className="bg-gray-200 hover:bg-gray-300 text-gray-800"
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    type="submit"
+                                    className="bg-burgundy-600 hover:bg-burgundy-700 text-white"
+                                  >
+                                    Add Supplier
+                                  </Button>
+                                </div>
+                              </form>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
+                        <select
+                          value={formData.supplier_id}
+                          onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-burgundy-500"
+                        >
+                          <option value="">No Supplier</option>
+                          {suppliers.map(supplier => (
+                            <option key={supplier.id} value={supplier.id}>
+                              {supplier.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
                       <div>
@@ -238,19 +439,13 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-burgundy-500"
                         />
                       </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Supplier
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.supplier}
-                          onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-burgundy-500"
-                        />
-                      </div>
                     </div>
+
+                    {error && (
+                      <Alert className="bg-red-50 border-red-200">
+                        <AlertDescription className="text-red-800">{error}</AlertDescription>
+                      </Alert>
+                    )}
 
                     <div className="flex justify-end gap-3 pt-4">
                       <Button
@@ -264,13 +459,19 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                         type="submit"
                         className="bg-burgundy-600 hover:bg-burgundy-700 text-white"
                       >
-                        {editingWine ? 'Update Product' : 'Add Product'}
+                        {editingProduct ? 'Update Product' : 'Add Product'}
                       </Button>
                     </div>
                   </form>
                 </DialogContent>
               </Dialog>
             </div>
+
+            {error && !isAddDialogOpen && (
+              <Alert className="mb-4 bg-red-50 border-red-200">
+                <AlertDescription className="text-red-800">{error}</AlertDescription>
+              </Alert>
+            )}
 
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -284,7 +485,12 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
             </div>
           </div>
 
-          {wines.length === 0 ? (
+          {loading ? (
+            <div className="p-12 text-center">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-burgundy-600 border-r-transparent"></div>
+              <p className="mt-4 text-gray-600">Loading products...</p>
+            </div>
+          ) : products.length === 0 ? (
             <div className="p-12 text-center">
               <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-700 mb-2">No products yet</h3>
@@ -297,6 +503,9 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Product
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Supplier
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Category
@@ -313,48 +522,56 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredWines.map((wine) => (
-                    <tr key={wine.id} className="hover:bg-gray-50">
+                  {filteredProducts.map((product) => (
+                    <tr key={product.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
-                          <span className="text-sm font-medium text-gray-900">{wine.name}</span>
-                          {wine.vintage && (
-                            <span className="text-xs text-gray-500">{wine.vintage}</span>
+                          <span className="text-sm font-medium text-gray-900">{product.name}</span>
+                          {product.vintage && (
+                            <span className="text-xs text-gray-500">{product.vintage}</span>
                           )}
-                          {wine.description && (
-                            <span className="text-xs text-gray-600 mt-1 line-clamp-2">{wine.description}</span>
+                          {product.description && (
+                            <span className="text-xs text-gray-600 mt-1 line-clamp-2">{product.description}</span>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4">
+                        {product.supplier ? (
+                          <Badge variant="secondary" className="text-xs">
+                            {product.supplier}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-gray-400">No supplier</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
                         <Badge variant="secondary" className="text-xs">
-                          {wine.category}
+                          {product.category}
                         </Badge>
                       </td>
                       <td className="px-6 py-4">
                         <span className="text-sm font-semibold text-burgundy-600">
-                          R{wine.price.toFixed(2)}
+                          R{product.price.toFixed(2)}
                         </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1 text-xs text-gray-600">
-                          {wine.region && <span>Region: {wine.region}</span>}
-                          {wine.varietal && <span>Varietal: {wine.varietal}</span>}
-                          {wine.supplier && <span>Supplier: {wine.supplier}</span>}
+                          {product.region && <span>Region: {product.region}</span>}
+                          {product.varietal && <span>Varietal: {product.varietal}</span>}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Button
-                            onClick={() => handleEdit(wine)}
+                            onClick={() => handleEdit(product)}
                             className="bg-gray-100 hover:bg-gray-200 text-gray-700 p-2"
                           >
                             <Edit2 className="h-4 w-4" />
                           </Button>
-                          {deleteConfirm === wine.id ? (
+                          {deleteConfirm === product.id ? (
                             <div className="flex items-center gap-2">
                               <Button
-                                onClick={() => handleDelete(wine.id)}
+                                onClick={() => handleDelete(product.id)}
                                 className="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1"
                               >
                                 Confirm
@@ -368,7 +585,7 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                             </div>
                           ) : (
                             <Button
-                              onClick={() => setDeleteConfirm(wine.id)}
+                              onClick={() => setDeleteConfirm(product.id)}
                               className="bg-red-100 hover:bg-red-200 text-red-700 p-2"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -383,7 +600,7 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
             </div>
           )}
 
-          {wines.length > 0 && filteredWines.length === 0 && (
+          {products.length > 0 && filteredProducts.length === 0 && (
             <div className="p-8 text-center text-gray-500">
               <Search className="mx-auto h-8 w-8 mb-2" />
               <p>No products match your search</p>

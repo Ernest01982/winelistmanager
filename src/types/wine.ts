@@ -7,7 +7,11 @@ export interface Wine {
   price: number;
   region?: string;
   varietal?: string;
+  supplier_id?: string;
+  supplier?: string;
   selected: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface CompanyInfo {
