@@ -21,12 +21,29 @@ function getWineCategory(wine: Wine): string {
   }
 }
 
+const addCenteredMultilineText = (
+  pdf: jsPDF,
+  text: string,
+  yPosition: number,
+  options: { maxWidth?: number; lineHeight?: number } = {}
+): number => {
+  const { maxWidth = 170, lineHeight = 5 } = options;
+  const lines = pdf.splitTextToSize(text, maxWidth);
+
+  lines.forEach((line) => {
+    pdf.text(line, 105, yPosition, { align: 'center' });
+    yPosition += lineHeight;
+  });
+
+  return yPosition;
+};
+
 export const generatePDF = (wines: Wine[], companyInfo: CompanyInfo): void => {
   const pdf = new jsPDF();
-  
+
   // Set font
   pdf.setFont('helvetica');
-  
+
   let yPosition = 20;
   
   // Company logo
@@ -52,19 +69,19 @@ export const generatePDF = (wines: Wine[], companyInfo: CompanyInfo): void => {
   pdf.setTextColor(100, 100, 100);
   
   if (companyInfo.address) {
-    pdf.text(companyInfo.address, 105, yPosition, { align: 'center' });
-    yPosition += 8;
+    yPosition = addCenteredMultilineText(pdf, companyInfo.address, yPosition);
+    yPosition += 3;
   }
-  
+
   if (companyInfo.phone || companyInfo.email) {
     const contactInfo = [companyInfo.phone, companyInfo.email].filter(Boolean).join('    ');
-    pdf.text(contactInfo, 105, yPosition, { align: 'center' });
-    yPosition += 8;
+    yPosition = addCenteredMultilineText(pdf, contactInfo, yPosition);
+    yPosition += 3;
   }
-  
+
   if (companyInfo.website) {
-    pdf.text(companyInfo.website, 105, yPosition, { align: 'center' });
-    yPosition += 8;
+    yPosition = addCenteredMultilineText(pdf, companyInfo.website, yPosition);
+    yPosition += 3;
   }
   
   // Add line separator
