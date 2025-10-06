@@ -17,6 +17,7 @@ function App() {
     companyInfo,
     savedConfigs,
     currentConfigId,
+    updateWines,
     updateCompanyInfo,
     saveConfiguration,
     loadConfiguration,
@@ -99,7 +100,15 @@ function App() {
           )}
 
           {activeTab === 'selection' && (
-            <ProductSelection />
+            <ProductSelection
+              companyInfo={companyInfo}
+              savedConfigs={savedConfigs}
+              currentConfigId={currentConfigId}
+              onSaveConfiguration={saveConfiguration}
+              onLoadConfiguration={loadConfiguration}
+              onDeleteConfiguration={deleteConfiguration}
+              onProductsSynced={updateWines}
+            />
           )}
 
           {activeTab === 'branding' && (
