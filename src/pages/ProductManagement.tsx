@@ -203,9 +203,27 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({ onProducts
       await loadProducts();
       onProductsChanged?.();
     } catch (uploadErr) {
-      setUploadErrors([
-        uploadErr instanceof Error ? uploadErr.message : 'Failed to upload products.'
-      ]);
+      let errorMessage = 'Failed to upload products.';
+
+      if (uploadErr instanceof Error) {
+        errorMessage = uploadErr.message;
+      } else if (
+        uploadErr &&
+        typeof uploadErr === 'object' &&
+        'message' in uploadErr &&
+        typeof (uploadErr as { message?: unknown }).message === 'string'
+      ) {
+        errorMessage = (uploadErr as { message: string }).message;
+        if (
+          'details' in uploadErr &&
+          typeof (uploadErr as { details?: unknown }).details === 'string' &&
+          (uploadErr as { details: string }).details.trim()
+        ) {
+          errorMessage = `${errorMessage} — ${(uploadErr as { details: string }).details}`;
+        }
+      }
+
+      setUploadErrors([errorMessage]);
       setUploadAlertType('error');
     } finally {
       setUploading(false);
