@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Wine } from '../types/wine';
 import { Supplier } from '../types/supplier';
-import { Trash2, Plus, Package, Search, CreditCard as Edit2, X, PlusCircle } from 'lucide-react';
+import { Trash2, Plus, Package, Search, CreditCard as Edit2, X, PlusCircle, Upload, Download } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Badge } from '../components/ui/badge';
 import { supabase } from '../lib/supabase';
+import { generateProductUploadTemplate, parseProductUploadFile } from '../utils/productUpload';
 
 interface ProductManagementProps {
   onProductsChanged?: () => void;
@@ -22,6 +23,11 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({ onProducts
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+  const [uploadAlertType, setUploadAlertType] = useState<'error' | 'warning' | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -95,6 +101,117 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({ onProducts
       setSuppliers(data || []);
     } catch (err) {
       console.error('Failed to load suppliers:', err);
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    generateProductUploadTemplate();
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadMessage(null);
+    setUploadErrors([]);
+    setUploadAlertType(null);
+    setUploading(true);
+
+    try {
+      const result = await parseProductUploadFile(file);
+      const supplierNameLookup = new Map(
+        suppliers.map(supplier => [supplier.name.trim().toLowerCase(), supplier.id])
+      );
+      const supplierIdLookup = new Set(suppliers.map(supplier => supplier.id));
+      const supplierErrors: string[] = [];
+
+      const rowsToUpsert = result.products.map(product => {
+        let supplierId: string | null = null;
+
+        if (product.supplierId) {
+          if (supplierIdLookup.has(product.supplierId)) {
+            supplierId = product.supplierId;
+          } else {
+            supplierErrors.push(
+              `Row ${product.rowNumber}: Supplier ID "${product.supplierId}" was not found.`
+            );
+            return null;
+          }
+        } else if (product.supplier) {
+          const lookupId = supplierNameLookup.get(product.supplier.trim().toLowerCase());
+          if (lookupId) {
+            supplierId = lookupId;
+          } else {
+            supplierErrors.push(
+              `Row ${product.rowNumber}: Supplier "${product.supplier}" was not found. Add the supplier first or leave the field blank.`
+            );
+            return null;
+          }
+        }
+
+        const toNullable = (value?: string) => (value && value.trim() !== '' ? value.trim() : null);
+
+        return {
+          id: product.id || undefined,
+          name: product.name.trim(),
+          description: toNullable(product.description),
+          category: toNullable(product.category) || 'Red Wine',
+          vintage: toNullable(product.vintage),
+          price: product.price,
+          region: toNullable(product.region),
+          varietal: toNullable(product.varietal),
+          supplier_id: supplierId
+        };
+      }).filter((row): row is {
+        id?: string;
+        name: string;
+        description: string | null;
+        category: string;
+        vintage: string | null;
+        price: number;
+        region: string | null;
+        varietal: string | null;
+        supplier_id: string | null;
+      } => row !== null);
+
+      const combinedErrors = [...result.errors, ...supplierErrors];
+
+      if (rowsToUpsert.length === 0) {
+        setUploadErrors(combinedErrors.length ? combinedErrors : ['No valid rows found in the file.']);
+        setUploadAlertType('error');
+        return;
+      }
+
+      const { error: upsertError } = await supabase
+        .from('products')
+        .upsert(rowsToUpsert, { onConflict: 'id' });
+
+      if (upsertError) {
+        throw upsertError;
+      }
+
+      setUploadMessage(`Successfully uploaded ${rowsToUpsert.length} product${rowsToUpsert.length === 1 ? '' : 's'}.`);
+
+      if (combinedErrors.length) {
+        setUploadErrors(combinedErrors);
+        setUploadAlertType('warning');
+      } else {
+        setUploadErrors([]);
+        setUploadAlertType(null);
+      }
+
+      await loadProducts();
+      onProductsChanged?.();
+    } catch (uploadErr) {
+      setUploadErrors([
+        uploadErr instanceof Error ? uploadErr.message : 'Failed to upload products.'
+      ]);
+      setUploadAlertType('error');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -478,6 +595,70 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({ onProducts
               </Alert>
             )}
 
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-800">Bulk upload products</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Download the template, fill in your product details, and upload an Excel or CSV file to add or update products in bulk.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    type="button"
+                    onClick={handleDownloadTemplate}
+                    className="bg-white text-burgundy-600 border border-burgundy-200 hover:bg-burgundy-50"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download Excel Template
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="bg-burgundy-600 hover:bg-burgundy-700 text-white"
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    {uploading ? 'Uploading...' : 'Upload Products'}
+                  </Button>
+                </div>
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+
+              {uploadMessage && (
+                <Alert className="mt-4 bg-green-50 border-green-200">
+                  <AlertDescription className="text-green-800">{uploadMessage}</AlertDescription>
+                </Alert>
+              )}
+
+              {uploadAlertType && uploadErrors.length > 0 && (
+                <Alert
+                  className={`mt-4 ${
+                    uploadAlertType === 'warning'
+                      ? 'bg-amber-50 border-amber-200'
+                      : 'bg-red-50 border-red-200'
+                  }`}
+                >
+                  <AlertDescription
+                    className={uploadAlertType === 'warning' ? 'text-amber-800' : 'text-red-800'}
+                  >
+                    <ul className="list-disc pl-5 space-y-1">
+                      {uploadErrors.map((errMsg, index) => (
+                        <li key={index}>{errMsg}</li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
@@ -499,7 +680,9 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({ onProducts
             <div className="p-12 text-center">
               <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-700 mb-2">No products yet</h3>
-              <p className="text-gray-500 mb-4">Get started by adding your first product or uploading a file</p>
+              <p className="text-gray-500 mb-4">
+                Use the bulk upload tools above to import products from Excel/CSV or add them manually.
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
