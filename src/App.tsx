@@ -1,40 +1,31 @@
 import React, { useState } from 'react';
-import { Wine as WineIcon, Upload, Eye, Download, Settings, FileSpreadsheet, Package, Truck } from 'lucide-react';
-import { FileUpload } from './components/FileUpload';
+import { Wine as WineIcon, Eye, Download, Settings, Package, Truck } from 'lucide-react';
 import { CompanyBranding } from './components/CompanyBranding';
 import { WinePreview } from './components/WinePreview';
 import { ExportOptions } from './components/ExportOptions';
 import { useWineData } from './hooks/useWineData';
-import { PricingUpload } from './pages/PricingUpload';
 import { ProductManagement } from './pages/ProductManagement';
 import { ProductSelection } from './pages/ProductSelection';
 import { SupplierManagement } from './pages/SupplierManagement';
 
-type ActiveTab = 'upload' | 'branding' | 'selection' | 'preview' | 'export' | 'pricing' | 'products' | 'suppliers';
+type ActiveTab = 'branding' | 'selection' | 'preview' | 'export' | 'products' | 'suppliers';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('upload');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('products');
   const {
     wines,
     companyInfo,
     savedConfigs,
     currentConfigId,
-    updateWines,
-    toggleWineSelection,
     updateCompanyInfo,
     saveConfiguration,
     loadConfiguration,
     deleteConfiguration,
-    addWine,
-    deleteWine,
-    updateWine
   } = useWineData();
 
   const selectedCount = wines.filter(wine => wine.selected).length;
 
   const tabs = [
-    { id: 'upload' as ActiveTab, label: 'Upload', icon: Upload, disabled: false },
-    { id: 'pricing' as ActiveTab, label: 'Pricing Upload', icon: FileSpreadsheet, disabled: false },
     { id: 'suppliers' as ActiveTab, label: 'Suppliers', icon: Truck, disabled: false },
     { id: 'products' as ActiveTab, label: 'Products', icon: Package, disabled: false },
     { id: 'selection' as ActiveTab, label: 'Selection', icon: WineIcon, disabled: false },
@@ -42,13 +33,6 @@ function App() {
     { id: 'preview' as ActiveTab, label: 'Preview', icon: Eye, disabled: selectedCount === 0 },
     { id: 'export' as ActiveTab, label: 'Export', icon: Download, disabled: selectedCount === 0 },
   ];
-
-  const handleWinesUploaded = (newWines: any[]) => {
-    updateWines(newWines);
-    if (newWines.length > 0) {
-      setActiveTab('selection');
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -106,22 +90,6 @@ function App() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-8">
-          {activeTab === 'upload' && (
-            <div>
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Upload Wine Inventory</h2>
-                <p className="text-gray-600">
-                  Import your wine data from CSV or Excel files to get started
-                </p>
-              </div>
-              <FileUpload onWinesUploaded={handleWinesUploaded} />
-            </div>
-          )}
-
-          {activeTab === 'pricing' && (
-            <PricingUpload />
-          )}
-
           {activeTab === 'suppliers' && (
             <SupplierManagement />
           )}
