@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Wine as WineIcon, Upload, Eye, Download, Settings, FileSpreadsheet } from 'lucide-react';
+import { Wine as WineIcon, Upload, Eye, Download, Settings, FileSpreadsheet, Package } from 'lucide-react';
 import { FileUpload } from './components/FileUpload';
 import { CompanyBranding } from './components/CompanyBranding';
 import { WineSelection } from './components/WineSelection';
@@ -7,8 +7,9 @@ import { WinePreview } from './components/WinePreview';
 import { ExportOptions } from './components/ExportOptions';
 import { useWineData } from './hooks/useWineData';
 import { PricingUpload } from './pages/PricingUpload';
+import { ProductManagement } from './pages/ProductManagement';
 
-type ActiveTab = 'upload' | 'branding' | 'selection' | 'preview' | 'export' | 'pricing';
+type ActiveTab = 'upload' | 'branding' | 'selection' | 'preview' | 'export' | 'pricing' | 'products';
 
 function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('upload');
@@ -22,7 +23,10 @@ function App() {
     updateCompanyInfo,
     saveConfiguration,
     loadConfiguration,
-    deleteConfiguration
+    deleteConfiguration,
+    addWine,
+    deleteWine,
+    updateWine
   } = useWineData();
 
   const selectedCount = wines.filter(wine => wine.selected).length;
@@ -30,6 +34,7 @@ function App() {
   const tabs = [
     { id: 'upload' as ActiveTab, label: 'Upload', icon: Upload, disabled: false },
     { id: 'pricing' as ActiveTab, label: 'Pricing Upload', icon: FileSpreadsheet, disabled: false },
+    { id: 'products' as ActiveTab, label: 'Products', icon: Package, disabled: false },
     { id: 'branding' as ActiveTab, label: 'Branding', icon: Settings, disabled: false },
     { id: 'selection' as ActiveTab, label: 'Selection', icon: WineIcon, disabled: wines.length === 0 },
     { id: 'preview' as ActiveTab, label: 'Preview', icon: Eye, disabled: selectedCount === 0 },
@@ -113,6 +118,15 @@ function App() {
 
           {activeTab === 'pricing' && (
             <PricingUpload />
+          )}
+
+          {activeTab === 'products' && (
+            <ProductManagement
+              wines={wines}
+              onAddWine={addWine}
+              onDeleteWine={deleteWine}
+              onUpdateWine={updateWine}
+            />
           )}
 
           {activeTab === 'branding' && (

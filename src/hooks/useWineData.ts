@@ -93,6 +93,25 @@ export const useWineData = () => {
     }
   };
 
+  const addWine = (wine: Omit<Wine, 'id' | 'selected'>) => {
+    const newWine: Wine = {
+      ...wine,
+      id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+      selected: false
+    };
+    setWines(prev => [...prev, newWine]);
+  };
+
+  const deleteWine = (wineId: string) => {
+    setWines(prev => prev.filter(wine => wine.id !== wineId));
+  };
+
+  const updateWine = (wineId: string, updates: Partial<Wine>) => {
+    setWines(prev => prev.map(wine =>
+      wine.id === wineId ? { ...wine, ...updates } : wine
+    ));
+  };
+
   return {
     wines,
     companyInfo,
@@ -103,6 +122,9 @@ export const useWineData = () => {
     updateCompanyInfo,
     saveConfiguration,
     loadConfiguration,
-    deleteConfiguration
+    deleteConfiguration,
+    addWine,
+    deleteWine,
+    updateWine
   };
 };
