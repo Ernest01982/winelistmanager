@@ -151,8 +151,17 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({ onProducts
 
         const toNullable = (value?: string) => (value && value.trim() !== '' ? value.trim() : null);
 
-        return {
-          id: product.id || undefined,
+        const payload: {
+          id?: string;
+          name: string;
+          description: string | null;
+          category: string;
+          vintage: string | null;
+          price: number;
+          region: string | null;
+          varietal: string | null;
+          supplier_id: string | null;
+        } = {
           name: product.name.trim(),
           description: toNullable(product.description),
           category: toNullable(product.category) || 'Red Wine',
@@ -162,6 +171,13 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({ onProducts
           varietal: toNullable(product.varietal),
           supplier_id: supplierId
         };
+
+        const trimmedId = product.id?.trim();
+        if (trimmedId) {
+          payload.id = trimmedId;
+        }
+
+        return payload;
       }).filter((row): row is {
         id?: string;
         name: string;
