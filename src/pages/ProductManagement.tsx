@@ -65,11 +65,16 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({ onProducts
 
       if (error) throw error;
 
-      const productsWithSupplier = (data || []).map(product => ({
-        ...product,
-        supplier: product.suppliers?.name,
-        supplier_id: product.supplier_id || undefined
-      }));
+      const productsWithSupplier = (data || []).map(product => {
+        const parsedPrice = Number(product.price);
+
+        return {
+          ...product,
+          price: Number.isFinite(parsedPrice) ? parsedPrice : 0,
+          supplier: product.suppliers?.name,
+          supplier_id: product.supplier_id || undefined
+        };
+      });
 
       setProducts(productsWithSupplier);
     } catch (err) {
